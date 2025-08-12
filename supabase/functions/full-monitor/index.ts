@@ -49,15 +49,7 @@ serve(async (req) => {
         await log('ERROR', `Exchange info attempt ${retryCount} failed`, { error: error.message })
         
         if (retryCount >= maxRetries) {
-          // Son çare: Hardcoded popüler coinler listesi
-          allSymbols = [
-            'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'SOLUSDT', 'DOTUSDT', 'DOGEUSDT',
-            'AVAXUSDT', 'SHIBUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT',
-            'XLMUSDT', 'BCHUSDT', 'FILUSDT', 'TRXUSDT', 'EOSUSDT', 'AAVEUSDT', 'GRTUSDT', 'VETUSDT',
-            'FTMUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'IOTAUSDT', 'ALGOUSDT', 'NEARUSDT', 'ROSEUSDT'
-          ]
-          await log('WARN', `Using fallback coin list with ${allSymbols.length} popular pairs`)
-          break
+          throw new Error(`Failed to get exchange info after ${maxRetries} attempts`)
         }
         
         // Exponential backoff: 2^retry * 1000ms
@@ -76,10 +68,10 @@ serve(async (req) => {
       const batch = allSymbols.slice(i, i + batchSize)
       
       // Batch içindeki her coin için kline verilerini al
-      const batchPromises = batch.map(async (symbol: string) => {
-        try {
-          // Son 2 dakikalık 1m kline verilerini al
-          const klineUrl = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=2`
+  const batchPromises = batch.map(async (symbol: string) => {
+    try {
+      // Son 6 dakikalık 1m kline verilerini al (5 dakikalık analiz için)
+      const klineUrl = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=6`
           const klineResponse = await fetch(klineUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; CryptoBot/1.0)'
@@ -90,7 +82,7 @@ serve(async (req) => {
             // Rate limit hatası durumunda kısa bekle ve tekrar dene
             if (klineResponse.status === 429 || klineResponse.status === 451) {
               await new Promise(resolve => setTimeout(resolve, 1000))
-              const retryResponse = await fetch(klineUrl, {
+              const retryResponse = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=6`, {
                 headers: {
                   'User-Agent': 'Mozilla/5.0 (compatible; CryptoBot/1.0)'
                 }
@@ -99,15 +91,15 @@ serve(async (req) => {
                 return null
               }
               const retryData = await retryResponse.json()
-              if (retryData.length < 2) return null
+              if (retryData.length < 6) return null
               
-              // Retry data ile devam et
-              const currentCandle = retryData[0]
-              const previousCandle = retryData[1]
+              // 5 dakikalık analiz - en son mum vs 5 dakika önceki mum
+              const currentCandle = retryData[0]  // En son mum
+              const fiveMinutesAgo = retryData[5] // 5 dakika önceki mum
               const currentClose = parseFloat(currentCandle[4])
-              const previousClose = parseFloat(previousCandle[4])
+              const fiveMinutesAgoClose = parseFloat(fiveMinutesAgo[4])
               const volume = parseFloat(currentCandle[5])
-              const priceChange = ((currentClose - previousClose) / previousClose) * 100
+              const priceChange = ((currentClose - fiveMinutesAgoClose) / fiveMinutesAgoClose) * 100
 
               if (Math.abs(priceChange) >= 3.0) {
                 const signalType = priceChange > 0 ? 'PUMP' : 'DUMP'
@@ -127,22 +119,22 @@ serve(async (req) => {
 
           const klineData = await klineResponse.json()
           
-          if (klineData.length < 2) {
+          if (klineData.length < 6) {
             return null
           }
 
-          // Son tamamlanan mum (index 0) ve önceki mum (index 1)
-          const currentCandle = klineData[0]
-          const previousCandle = klineData[1]
+          // 5 dakikalık analiz - en son mum vs 5 dakika önceki mum
+          const currentCandle = klineData[0]    // En son mum
+          const fiveMinutesAgo = klineData[5]   // 5 dakika önceki mum
 
-          const currentClose = parseFloat(currentCandle[4])  // Close price
-          const previousClose = parseFloat(previousCandle[4]) // Previous close price
-          const volume = parseFloat(currentCandle[5])        // Volume
+          const currentClose = parseFloat(currentCandle[4])      // Şu anki fiyat
+          const fiveMinutesAgoClose = parseFloat(fiveMinutesAgo[4]) // 5 dakika önceki fiyat
+          const volume = parseFloat(currentCandle[5])            // Volume
 
-          // 1 dakikalık değişim hesapla
-          const priceChange = ((currentClose - previousClose) / previousClose) * 100
+          // 5 dakikalık değişim hesapla
+          const priceChange = ((currentClose - fiveMinutesAgoClose) / fiveMinutesAgoClose) * 100
 
-          // %3+ değişim kontrolü
+          // %3+ değişim kontrolü (5 dakikalık)
           if (Math.abs(priceChange) >= 3.0) {
             const signalType = priceChange > 0 ? 'PUMP' : 'DUMP'
             

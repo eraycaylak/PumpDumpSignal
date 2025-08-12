@@ -2,8 +2,8 @@ name: Crypto Monitor
 
 on:
   schedule:
-    # Her dakika çalışır (UTC)
-    - cron: '* * * * *'
+    # Her 5 dakikada bir çalışır (UTC)
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Manuel tetikleme için
 
 jobs:
