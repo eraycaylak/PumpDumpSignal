@@ -17,18 +17,55 @@ serve(async (req) => {
 
     await log('INFO', 'Full monitor started - scanning ALL futures pairs')
 
-    // 1. Önce tüm futures çiftlerini al
-    const exchangeInfoResponse = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo')
-    if (!exchangeInfoResponse.ok) {
-      throw new Error(`Exchange info error: ${exchangeInfoResponse.status}`)
+    // Retry logic ile exchange info al
+    let allSymbols: string[] = []
+    let retryCount = 0
+    const maxRetries = 3
+
+    while (retryCount < maxRetries) {
+      try {
+        await log('INFO', `Attempting to get exchange info (attempt ${retryCount + 1}/${maxRetries})`)
+        
+        const exchangeInfoResponse = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo', {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; CryptoBot/1.0)'
+          }
+        })
+        
+        if (!exchangeInfoResponse.ok) {
+          throw new Error(`Exchange info error: ${exchangeInfoResponse.status}`)
+        }
+
+        const exchangeInfo = await exchangeInfoResponse.json()
+        allSymbols = exchangeInfo.symbols
+          .filter((s: any) => s.status === 'TRADING' && s.symbol.endsWith('USDT'))
+          .map((s: any) => s.symbol)
+
+        await log('INFO', `Found ${allSymbols.length} active USDT futures pairs`)
+        break // Başarılı, döngüden çık
+
+      } catch (error) {
+        retryCount++
+        await log('ERROR', `Exchange info attempt ${retryCount} failed`, { error: error.message })
+        
+        if (retryCount >= maxRetries) {
+          // Son çare: Hardcoded popüler coinler listesi
+          allSymbols = [
+            'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'SOLUSDT', 'DOTUSDT', 'DOGEUSDT',
+            'AVAXUSDT', 'SHIBUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT',
+            'XLMUSDT', 'BCHUSDT', 'FILUSDT', 'TRXUSDT', 'EOSUSDT', 'AAVEUSDT', 'GRTUSDT', 'VETUSDT',
+            'FTMUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'IOTAUSDT', 'ALGOUSDT', 'NEARUSDT', 'ROSEUSDT'
+          ]
+          await log('WARN', `Using fallback coin list with ${allSymbols.length} popular pairs`)
+          break
+        }
+        
+        // Exponential backoff: 2^retry * 1000ms
+        const delay = Math.pow(2, retryCount) * 1000
+        await log('INFO', `Waiting ${delay}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
     }
-
-    const exchangeInfo = await exchangeInfoResponse.json()
-    const allSymbols = exchangeInfo.symbols
-      .filter((s: any) => s.status === 'TRADING' && s.symbol.endsWith('USDT'))
-      .map((s: any) => s.symbol)
-
-    await log('INFO', `Found ${allSymbols.length} active USDT futures pairs`)
 
     const notifications = []
     let processedPairs = 0
@@ -43,9 +80,48 @@ serve(async (req) => {
         try {
           // Son 2 dakikalık 1m kline verilerini al
           const klineUrl = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=2`
-          const klineResponse = await fetch(klineUrl)
+          const klineResponse = await fetch(klineUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; CryptoBot/1.0)'
+            }
+          })
           
           if (!klineResponse.ok) {
+            // Rate limit hatası durumunda kısa bekle ve tekrar dene
+            if (klineResponse.status === 429 || klineResponse.status === 451) {
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              const retryResponse = await fetch(klineUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (compatible; CryptoBot/1.0)'
+                }
+              })
+              if (!retryResponse.ok) {
+                return null
+              }
+              const retryData = await retryResponse.json()
+              if (retryData.length < 2) return null
+              
+              // Retry data ile devam et
+              const currentCandle = retryData[0]
+              const previousCandle = retryData[1]
+              const currentClose = parseFloat(currentCandle[4])
+              const previousClose = parseFloat(previousCandle[4])
+              const volume = parseFloat(currentCandle[5])
+              const priceChange = ((currentClose - previousClose) / previousClose) * 100
+
+              if (Math.abs(priceChange) >= 3.0) {
+                const signalType = priceChange > 0 ? 'PUMP' : 'DUMP'
+                return {
+                  symbol,
+                  change_percent: priceChange,
+                  price: currentClose,
+                  volume: volume,
+                  signal_type: signalType,
+                  timestamp: Date.now()
+                }
+              }
+              return null
+            }
             return null
           }
 
