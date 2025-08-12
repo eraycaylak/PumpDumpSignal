@@ -227,8 +227,17 @@ async function sendTelegramNotification(notification: any, log: Function) {
     const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')!
     const channelId = Deno.env.get('TELEGRAM_CHANNEL_ID')!
 
-    const emoji = notification.signal_type === 'PUMP' ? '↗️' : '↘️'
-    const signalEmoji = notification.signal_type === 'PUMP' ? '🚀' : '📉'
+    // Premium emoji efekti için rastgele seçim
+    const pumpEmojis = ['🚀', '💎', '⭐', '✨', '🌟', '💫', '🔥', '💥', '⚡']
+    const dumpEmojis = ['💀', '🔻', '⬇️', '📉', '💔', '🩸', '❄️', '🌊', '💧']
+    
+    const emoji = notification.signal_type === 'PUMP' ? '📈' : '📉'
+    const signalEmoji = notification.signal_type === 'PUMP'
+      ? pumpEmojis[Math.floor(Math.random() * pumpEmojis.length)]
+      : dumpEmojis[Math.floor(Math.random() * dumpEmojis.length)]
+    const trendEmoji = notification.signal_type === 'PUMP'
+      ? pumpEmojis[Math.floor(Math.random() * pumpEmojis.length)]
+      : dumpEmojis[Math.floor(Math.random() * dumpEmojis.length)]
     
     // Volume formatla
     const formatVolume = (volume: number): string => {
@@ -244,7 +253,7 @@ async function sendTelegramNotification(notification: any, log: Function) {
       return `$${price.toFixed(6)}`
     }
 
-    const message = `${signalEmoji} ${notification.symbol} ${notification.signal_type}! %${Math.abs(notification.change_percent).toFixed(2)}${emoji} | Fiyat: ${formatPrice(notification.price)} | Volume: ${formatVolume(notification.volume)}`
+    const message = `${signalEmoji} ${notification.symbol} ${notification.signal_type}! %${Math.abs(notification.change_percent).toFixed(2)}${emoji} | Fiyat: ${formatPrice(notification.price)} | Volume: ${formatVolume(notification.volume)} ${trendEmoji}`
 
     const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
