@@ -1,0 +1,19 @@
+name: Crypto Monitor
+
+on:
+  schedule:
+    # Her dakika çalışır (UTC)
+    - cron: '* * * * *'
+  workflow_dispatch: # Manuel tetikleme için
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Full Monitor Function
+        run: |
+          curl -X POST "https://adqefqexeludyhrlwklz.supabase.co/functions/v1/full-monitor" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkcWVmcWV4ZWx1ZHlocmx3a2x6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk5NzI3NiwiZXhwIjoyMDcwNTczMjc2fQ.MCE_KOqMt92EgeRAlmbWlE4BnZODCL_hAbRsnMv24XM" \
+            -H "Content-Type: application/json" \
+            --max-time 30 \
+            --retry 2

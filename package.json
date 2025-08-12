@@ -1,0 +1,41 @@
+{
+  "name": "crypto-pump-dump-bot",
+  "version": "1.0.0",
+  "description": "Binance Futures piyasasını takip eden ve %3+ değişim gösteren coinleri Telegram kanalına bildiren bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm run test:binance && npm run test:telegram",
+    "test:binance": "node test/binance-api-test.js",
+    "test:telegram": "node test/telegram-test.js",
+    "deploy": "./deploy.sh",
+    "setup": "cp .env.example .env && echo 'Please edit .env file with your credentials'",
+    "logs": "supabase functions logs price-monitor",
+    "logs:scheduler": "supabase functions logs scheduler"
+  },
+  "keywords": [
+    "crypto",
+    "binance",
+    "telegram",
+    "bot",
+    "futures",
+    "pump",
+    "dump",
+    "signals",
+    "supabase"
+  ],
+  "author": "Crypto Signal Bot",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {},
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/crypto-pump-dump-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/crypto-pump-dump-bot/issues"
+  },
+  "homepage": "https://github.com/your-username/crypto-pump-dump-bot#readme"
+}
