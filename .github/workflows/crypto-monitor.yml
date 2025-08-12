@@ -10,9 +10,9 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Full Monitor Function
+      - name: Trigger Heartbeat (calls full-monitor via database trigger)
         run: |
-          curl -X POST "https://adqefqexeludyhrlwklz.supabase.co/functions/v1/full-monitor" \
+          curl -X POST "https://adqefqexeludyhrlwklz.supabase.co/functions/v1/heartbeat" \
             -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkcWVmcWV4ZWx1ZHlocmx3a2x6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NDk5NzI3NiwiZXhwIjoyMDcwNTczMjc2fQ.MCE_KOqMt92EgeRAlmbWlE4BnZODCL_hAbRsnMv24XM" \
             -H "Content-Type: application/json" \
             --max-time 30 \
